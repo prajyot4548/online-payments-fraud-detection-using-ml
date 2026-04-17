@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Online Payments Fraud Detection</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+
+/* ===== GLOBAL ===== */
+body {
+    background: linear-gradient(135deg,#0a0f1c,#1a2338);
+    font-family: 'Segoe UI', sans-serif;
+    color: white;
+}
+
+/* ===== TITLE ===== */
+.title {
+    text-align: center;
+    font-size: 38px;
+    color: #22d3ee;
+    margin-bottom: 30px;
+}
+
+/* ===== GLASS CARD ===== */
+.glass {
+    background: rgba(15,23,42,0.8);
+    backdrop-filter: blur(15px);
+    border:1px solid rgba(34,211,238,0.2);
+    border-radius: 20px;
+    box-shadow: 0 0 25px rgba(0,255,255,0.05);
+}
+
+/* ===== INPUT ===== */
+.input-box {
+    width:100%;
+    padding:14px;
+    border-radius:10px;
+    border:1px solid #334155;
+    background:#020617;
+    color:white;
+}
+.input-box:focus {
+    border-color:#22d3ee;
+    box-shadow:0 0 10px #22d3ee;
+}
+
+/* ===== BUTTON ===== */
+.btn {
+    width:100%;
+    padding:16px;
+    background: linear-gradient(90deg,#22d3ee,#38bdf8);
+    border-radius:12px;
+    color:black;
+    font-weight:bold;
+    transition:0.3s;
+}
+.btn:hover {
+    transform: scale(1.05);
+}
+
+/* ===== RESULT ===== */
+.bar {
+    height:14px;
+    border-radius:10px;
+    transition:0.5s;
+}
+
+/* ===== HISTORY TABLE ===== */
+.table-container {
+    overflow-x: auto;
+}
+
+table {
+    width:100%;
+    border-collapse: collapse;
+}
+
+th {
+    text-align: left;
+    padding: 14px;
+    color: #94a3b8;
+    font-weight: 600;
+    border-bottom: 1px solid #334155;
+}
+
+td {
+    padding: 14px;
+    border-bottom: 1px solid #1e293b;
+}
+
+tr:hover {
+    background: rgba(34,211,238,0.05);
+    transition: 0.3s;
+}
+
+/* ===== STATUS COLORS ===== */
+.status-fraud {
+    color: #ef4444;
+    font-weight: bold;
+}
+
+.status-safe {
+    color: #22c55e;
+    font-weight: bold;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="max-w-7xl mx-auto p-6">
+
+<h1 class="title">Online Payments Fraud Detection</h1>
+
+<div class="grid md:grid-cols-2 gap-8">
+
+<!-- FORM -->
+<div class="glass p-6">
+
+<form id="form">
+
+<input name="step" type="number" placeholder="Step" class="input-box mb-3" required>
+
+<select name="type" class="input-box mb-3">
+<option>PAYMENT</option>
+<option>TRANSFER</option>
+<option>CASH_OUT</option>
+<option>DEBIT</option>
+<option>CASH_IN</option>
+</select>
+
+<input name="amount" type="number" placeholder="Amount" class="input-box mb-3" required>
+
+<input name="oldbalanceOrg" type="number" placeholder="Old Sender Balance" class="input-box mb-3">
+<input name="newbalanceOrig" type="number" placeholder="New Sender Balance" class="input-box mb-3">
+
+<input name="oldbalanceDest" type="number" placeholder="Old Receiver Balance" class="input-box mb-3">
+<input name="newbalanceDest" type="number" placeholder="New Receiver Balance" class="input-box mb-3">
+
+<button type="button" onclick="predict()" class="btn mt-4">
+Predict Fraud
+</button>
+
+</form>
+
+</div>
+
+<!-- RESULT -->
+<div class="glass p-6 text-center">
+
+<h2 id="prediction" class="text-3xl mb-3">Waiting...</h2>
+<p id="risk"></p>
+
+<div class="bg-gray-700 mt-4">
+<div id="bar" class="bar"></div>
+</div>
+
+<p id="level" class="mt-4"></p>
+
+</div>
+
+</div>
+
+<!-- HISTORY -->
+<div class="glass p-6 mt-10">
+
+<h2 class="mb-4 text-xl">Prediction History</h2>
+
+<div class="table-container">
+<table>
+
+<thead>
+<tr>
+<th>Time</th>
+<th>Type</th>
+<th>Amount</th>
+<th>Risk</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody id="history"></tbody>
+
+</table>
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+let history=[];
+
+async function predict(){
+
+let f=new FormData(document.getElementById("form"))
+
+let data={
+step:parseFloat(f.get("step")),
+type:f.get("type"),
+amount:parseFloat(f.get("amount")),
+oldbalanceOrg:parseFloat(f.get("oldbalanceOrg")||0),
+newbalanceOrig:parseFloat(f.get("newbalanceOrig")||0),
+oldbalanceDest:parseFloat(f.get("oldbalanceDest")||0),
+newbalanceDest:parseFloat(f.get("newbalanceDest")||0)
+}
+
+let res=await fetch("/api/predict",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(data)
+})
+
+let out=await res.json()
+let risk=out.risk || 0
+
+// RESULT
+document.getElementById("prediction").innerText=out.prediction
+document.getElementById("prediction").style.color= out.status==="fraud"?"#ef4444":"#22c55e"
+
+document.getElementById("risk").innerText="Risk: "+risk+"%"
+
+let bar=document.getElementById("bar")
+bar.style.width=risk+"%"
+bar.style.background=risk>70?"red":risk>40?"orange":"green"
+
+document.getElementById("level").innerText=out.level
+
+// HISTORY
+history.unshift({
+time:new Date().toLocaleTimeString(),
+type:data.type,
+amount:data.amount,
+risk:risk,
+status:out.prediction
+})
+
+if(history.length>10)history.pop()
+
+renderHistory()
+
+}
+
+function renderHistory(){
+
+let html=""
+
+history.forEach(h=>{
+html+=`
+<tr>
+<td>${h.time}</td>
+<td>${h.type}</td>
+<td>${h.amount}</td>
+<td>${h.risk}%</td>
+<td class="${h.status==="Fraud"?"status-fraud":"status-safe"}">${h.status}</td>
+</tr>
+`
+})
+
+document.getElementById("history").innerHTML=html
+
+}
+
+</script>
+
+</body>
+</html>
